@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gym Management System - Attendance Control</title>
+    
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- HTML5-QRCode Library for Scanning -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- SheetJS Library for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #070b15;
+            --primary-dark: #26d35acf;
+            --bg-body: #f3f4f6;
+            --bg-card: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --success: #18abd8c7;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --sidebar-width: 260px;
+        }
+
+        body.dark-mode {
+            --bg-body: #111827;
+            --bg-card: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --border: #374151;
+            --primary: #3b82f6;
+        }
+
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        
+        body { margin: 0; background: var(--bg-body); color: var(--text-main); transition: background 0.3s, color 0.3s; }
+        
+        /* Layout */
+        .app-container { display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            z-index: 10;
+        }
+
+        .brand { font-size: 1.25rem; font-weight: bold; color: var(--primary); margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem; }
+        
+        .nav-item {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex; align-items: center; gap: 0.5rem;
+            color: var(--text-muted);
+        }
+        .nav-item:hover, .nav-item.active { background: var(--primary); color: white; }
+        
+        /* Main Content */
+        .main-content { flex: 1; overflow-y: auto; padding: 2rem; position: relative; }
+        
+        /* Components */
+        .btn {
+            padding: 0.5rem 1rem; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: 0.2s;
+            display: inline-flex; align-items: center; gap: 0.5rem;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-whatsapp { background: #25D366; color: white; }
+        .btn-whatsapp:hover { background: #128C7E; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+
+        input, select {
+            width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.375rem;
+            background: var(--bg-body); color: var(--text-main); margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+
+        /* Status Badges */
+        .badge { padding: 0.25rem 0.5rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
+        .bg-green { background: #d1fae5; color: #065f46; }
+        .bg-yellow { background: #fef3c7; color: #92400e; }
+        .bg-red { background: #fee2e2; color: #991b1b; }
+
+        /* Kiosk Mode - SPLIT LAYOUT */
+        #kiosk-view {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--bg-body); z-index: 100; display: none;
+            flex-direction: row; 
+            align-items: stretch;
+        }
+        #kiosk-view.active { display: flex; }
+
+        /* LEFT BOX: CAMERA */
+        .kiosk-camera-panel {
+            width: 400px; 
+            min-width: 300px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.5rem;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            z-index: 105;
+        }
+
+        /* RIGHT BOX: CONTENT */
+        .kiosk-content-panel {
+            flex: 1; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: var(--bg-body);
+            padding: 2rem;
+        }
+        
+        .kiosk-search-container { 
+            width: 100%; max-width: 600px; text-align: center; 
+            position: relative; z-index: 110; 
+        }
+        
+        /* Camera Styling inside box */
+        #reader {
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: scaleX(-1); /* Mirror Flip */
+        }
+        #reader a { display: none !important; }
+
+        .kiosk-input { font-size: 2rem; padding: 1rem; border: 2px solid var(--border); border-radius: 1rem; text-align: center; }
+        .kiosk-result { margin-top: 2rem; padding: 2rem; background: var(--bg-card); border-radius: 1rem; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+
+        /* iOS / Island Style Popup */
+        .welcome-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent; 
+            z-index: 150; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px); 
+            animation: fadeInOverlay 0.3s ease-out;
+        }
+        
+        .welcome-card {
+            background: white;
+            width: 90%; max-width: 450px;
+            padding: 3rem 2rem;
+            border-radius: 20px; 
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3); 
+            animation: scaleUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s ease;
+        }
+
+        .welcome-card h1 { font-size: 2.5rem; color: var(--text-main); margin: 0; transition: color 0.3s; }
+        .welcome-card h2 { font-size: 1.8rem; color: var(--success); margin: 0.5rem 0; font-weight: bold; transition: color 0.3s; }
+        .welcome-card p { color: var(--text-muted); margin: 0; font-size: 1.1rem; transition: color 0.3s; white-space: pre-line; }
+        .check-icon { font-size: 3.5rem; margin-bottom: 0.5rem; color: var(--success); transition: color 0.3s; }
+
+        @keyframes scaleUp {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ERROR STATE CSS - RED THEME */
+        .welcome-overlay.mode-error .welcome-card {
+            background: #dc2626;
+            border: 2px solid #991b1b;
+            box-shadow: 0 20px 50px rgba(220, 38, 38, 0.5);
+            transform: scale(1.05);
+        }
+        
+        .welcome-overlay.mode-error .welcome-card h1 { color: #ffffff; }
+        .welcome-overlay.mode-error .welcome-card h2 { color: #ffe4e6; font-size: 3rem; margin: 0.2rem 0; }
+        .welcome-overlay.mode-error .welcome-card p { color: #ffffff; font-weight: 500; }
+        .welcome-overlay.mode-error .check-icon { color: #ffffff; font-size: 4rem; }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 50; display: none;
+            align-items: center; justify-content: center;
+        }
+        .modal { background: var(--bg-card); padding: 2rem; border-radius: 1rem; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; text-align: center;}
+
+        /* Landing Page */
+        .landing-section {
+            display: none; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100%;
+            text-align: center;
+            padding: 2rem;
+        }
+        .landing-options { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 2rem; }
+        .landing-card {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 4rem 2rem; border-radius: 1.5rem; cursor: pointer; transition: transform 0.2s;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .landing-card:hover { transform: scale(1.02); }
+        .landing-member { background: var(--success); color: white; border-color: var(--success); }
+        .landing-admin { background: var(--bg-card); border-color: var(--border); color: var(--text-main); }
+        
+        .landing-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .landing-title { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .landing-desc { font-size: 1.1rem; color: var(--text-muted); }
+
+        /* Utility */
+        .hidden { display: none !important; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .mt-4 { margin-top: 1rem; }
+        .text-center { text-align: center; }
+        .font-bold { font-weight: bold; }
+        .text-danger { color: var(--danger); }
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 1rem; align-items: flex-end; }
+        .filter-group { flex: 1; }
+        label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; color: var(--text-muted); }
+        
+        /* Expanded width for Member Details */
+        .details-result-card { 
+            width: 100%; 
+            max-width: 100%;
+            margin: 20px auto; 
+            border-top: 4px solid var(--primary); 
+        }
+        .table-container { max-height: 60vh; overflow-y: auto; }
+        
+        .sidebar-bottom {
+            margin-top: auto;
+            display: flex; 
+            flex-direction: column; 
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        /* QR ID CARD STYLES */
+        #qr-display {
+            background: white;
+            padding: 2rem;
+            border: 2px solid #000;
+            width: 300px;
+            margin: 0 auto 1rem auto;
+            text-align: center;
+            color: black;
+            border-radius: 10px;
+        }
+        #qr-display img { margin: 0 auto; display: block; }
+        #qr-display h2 { margin: 10px 0 5px 0; font-size: 1.5rem; color: black; }
+        #qr-display p { margin: 0; color: #555; font-size: 1rem; }
+        
+        /* Apple Style Notification Toast */
+        .apple-toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .apple-toast {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 14px;
+            padding: 16px 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 400px;
+            animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .apple-toast.toast-success { border-left: 4px solid #34C759; }
+        .apple-toast.toast-error { border-left: 4px solid #FF3B30; }
+        .apple-toast.toast-warning { border-left: 4px solid #FF9500; }
+        .apple-toast.toast-info { border-left: 4px solid #007AFF; }
+        
+        .apple-toast-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .toast-success .apple-toast-icon { background: #34C759; color: white; }
+        .toast-error .apple-toast-icon { background: #FF3B30; color: white; }
+        .toast-warning .apple-toast-icon { background: #FF9500; color: white; }
+        .toast-info .apple-toast-icon { background: #007AFF; color: white; }
+        
+        .apple-toast-content { flex: 1; }
+        .apple-toast-title { font-weight: 600; font-size: 14px; color: #1d1d1f; margin-bottom: 2px; }
+        .apple-toast-message { font-size: 13px; color: #86868b; }
+        .apple-toast-close { background: none; border: none; font-size: 18px; color: #86868b; cursor: pointer; padding: 4px; opacity: 0.6; transition: opacity 0.2s; }
+        .apple-toast-close:hover { opacity: 1; }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        
+        .apple-toast.hiding { animation: slideOut 0.3s ease-in forwards; }
+
+        /* Dark mode toast */
+        body.dark-mode .apple-toast {
+            background: rgba(44, 44, 46, 0.95);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        body.dark-mode .apple-toast-title { color: #f5f5f7; }
+        body.dark-mode .apple-toast-message { color: #a1a1a6; }
+        body.dark-mode .apple-toast-close { color: #a1a1a6; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #qrModal, #qrModal * { visibility: visible; }
+            #qrModal {
+                position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: white; display: flex; align-items: center; justify-content: center; z-index: 99999;
+            }
+            .no-print { display: none !important; }
+        }
+
+        @media (max-width: 768px) {
+            #kiosk-view { flex-direction: column; }
+            .kiosk-camera-panel { width: 100%; height: 300px; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); }
+            #reader { width: 200px; height: 200px; }
+            .apple-toast-container { right: 10px; left: 10px; }
+            .apple-toast { min-width: auto; max-width: none; }
+        }
+        
+        .unpaid-badge { background: var(--danger); color: white; padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.8rem; font-weight: 600; display: inline-block; }
+        .unpaid-info { display: flex; align-items: center; gap: 0.5rem; }
+        .action-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+
+<!-- Apple Toast Container -->
+<div class="apple-toast-container" id="toastContainer"></div>
+
+<!-- SELECT MODE SECTION -->
+<section id="landing-section" class="landing-section">
+    <h1 style="margin-bottom: 0.5rem;">LDF OS</h1>
+    <p>Please select your mode to continue</p>
+    
+    <div class="landing-options">
+        <div class="landing-card landing-member" onclick="enterKioskMode()">
+            <div class="landing-icon">📷</div>
+            <div class="landing-title">Member</div>
+            <div class="landing-desc">Scan QR Code</div>
+        </div>
+
+        <div class="landing-card landing-admin" onclick="showPasswordModal()">
+            <div class="landing-icon">🔐</div>
+            <div class="landing-title">Admin</div>
+            <div class="landing-desc">Manage Gym</div>
+        </div>
+    </div>
+</section>
+
+<!-- PASSWORD  -->
+<div id="passwordModal" class="modal-overlay">
+    <div class="modal">
+        <h2>🔒 System Locked</h2>
+        <p>Please enter admin password to access Dashboard.</p>
+        <input type="password" id="adminPassword" placeholder="Password" onkeydown="if(event.key==='Enter')checkAuth()">
+        <button class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 1rem;" onclick="checkAuth()">Unlock</button>
+        <button class="btn btn-outline" style="width: 100%; margin-top: 0.5rem;" onclick="exitToLanding()">Back to Selection</button>
+    </div>
+</div>
+
+<!-- Kiosk Mode - SPLIT VIEW -->
+<div id="kiosk-view">
+    <div id="welcomeNotification" class="welcome-overlay">
+        <div class="welcome-card">
+            <div class="check-icon">✅</div>
+            <h1 id="welcomeMemberName">John Doe</h1>
+            <h2>Welcome!</h2>
+            <p id="welcomeMessage">Marked Present Successfully</p>
+        </div>
+    </div>
+    
+    <div class="kiosk-camera-panel">
+        <h3 style="margin: 0 0 1rem 0; color: var(--primary);">Scanner</h3>
+        <div id="reader"></div>
+        <div style="margin-top: 1rem; width: 100%;">
+            <button class="btn btn-outline" onclick="toggleCamera()" id="cameraBtn" style="width: 100%;">Turn Camera Off</button>
+            <button class="btn btn-danger" style="width: 100%; margin-top: 10px;" onclick="exitToLanding()">Exit</button>
+        </div>
+    </div>
+
+    <div class="kiosk-content-panel">
+        <div class="kiosk-search-container">
+            <img src="p13.png" width="180px" height="180px" style="margin-bottom: 2rem;" onerror="this.style.display='none'">
+            <input type="text" id="kioskInput" class="kiosk-input" placeholder="Scan QR or Type ID" onkeydown="handleScannerInput(event)">
+            <div id="kioskResult" class="kiosk-result hidden"></div>
+        </div>
+    </div>
+</div>
+
+<div class="app-container hidden" id="adminInterface">
+    <aside class="sidebar">
+        <div class="brand">
+            <span> <img src="p13.png" width="80px" height="80px" onerror="this.style.display='none'"></span>
+        </div>
+        <nav>
+            <div class="nav-item active" onclick="showSection('dashboard')"> Dashboard</div>
+            <div class="nav-item" onclick="showSection('members')"> All Members</div>
+            <div class="nav-item" onclick="showSection('member-details')"> Member Details</div>
+            <div class="nav-item" onclick="showSection('unpaid')">Unpaid</div>
+            <div class="nav-item" onclick="showSection('attendance-log')"> Monthly Attendance</div>
+            <div class="nav-item" onclick="showSection('settings')"> Settings / Backup</div>
+        </nav>
+        <div class="sidebar-bottom">
+             <button class="btn btn-danger" style="width: 100%; justify-content: center; font-weight: bold;" onclick="triggerLock()">🔒 LOCK</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        
+        <!-- Dashboard Section -->
+        <section id="dashboard">
+            <div class="flex-between mb-4">
+                <h2>Smart Dashboard</h2>
+                <button class="btn btn-success" onclick="showAddMemberModal()">+ Add Member</button>
+            </div>
+            
+            <div class="grid-4">
+                <div class="card" style="border-left: 5px solid var(--success);">
+                    <h3>Currently in Gym</h3>
+                    <h1 class="text-success" id="statCurrentlyIn">0</h1>
+                    <p class="text-sm">People checked in</p>
+                </div>
+                <div class="card">
+                    <h3>Active Members</h3>
+                    <h1 class="text-primary" id="statActiveMembers">0</h1>
+                    <p class="text-sm">Valid subscriptions</p>
+                </div>
+                <div class="card">
+                    <h3>Monthly Total</h3>
+                    <h1 class="text-primary" id="statTotalMonthly">LKR 0.00</h1>
+                    <button class="btn btn-sm btn-outline" onclick="resetFinancials('monthly')">Reset</button>
+                </div>
+                <div class="card">
+                    <h3>Admission Fees</h3>
+                    <h1 class="text-success" id="statTotalAdmission">LKR 0.00</h1>
+                    <button class="btn btn-sm btn-outline" onclick="resetFinancials('admission')">Reset</button>
+                </div>
+                <div class="card">
+                    <h3>Expiry Alerts</h3>
+                    <h1 class="text-danger" id="statExpiryCount">0</h1>
+                    <p class="text-sm">Members expired</p>
+                </div>
+                <div class="card">
+                    <h3>Inactive (5+ Days)</h3>
+                    <h1 class="text-warning" id="statInactiveCount">0</h1>
+                    <p class="text-sm">Needs attention</p>
+                </div>
+            </div>
+
+            <div class="grid-2 mt-4">
+                <div class="card">
+                    <div class="flex-between">
+                        <h3>Activity Alerts (>5 Days)</h3>
+                        <button class="btn btn-sm btn-whatsapp" id="remindAllBtn" onclick="remindAllInactive()">Remind All</button>
+                    </div>
+                    <div id="notificationList" style="max-height: 300px; overflow-y: auto;">
+                        <p class="text-muted">No urgent alerts.</p>
+                    </div>
+                </div>
+                
+                <!-- Export Card -->
+                <div class="card">
+                    <h3>Export Dashboard Data</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">Download current statistics and activity alerts.</p>
+                    <div class="grid-2 mt-4">
+                        <button class="btn btn-primary" onclick="downloadDashboardJson()">Download JSON</button>
+                        <button class="btn btn-success" onclick="downloadDashboardExcel()">Download Excel</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Member Details Section -->
+        <section id="member-details" class="hidden">
+            <div class="flex-between mb-4">
+                <h2>Member Details</h2>
+            </div>
+            <div class="card">
+                <label>Search Member (ID or Name)</label>
+                <input type="text" id="detailsSearchInput" placeholder="Type to find member..." oninput="renderAllMemberDetails()">
+            </div>
+            
+            <div id="detailsResultContainer" class="card details-result-card table-container">
+                <table id="detailsTable" style="margin-top:0;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Address</th>
+                            <th>Age</th>
+                            <th>Weight (kg)</th>
+                            <th>Joined Date</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Members Section -->
+        <section id="members" class="hidden">
+            <div class="flex-between mb-4">
+                <h2>Member List</h2>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="memberSearch" placeholder="Search ID or Name..." oninput="renderMembers()" style="margin-bottom: 0; width: 200px;">
+                    <button class="btn btn-success" onclick="exportToCSV()">Export CSV</button>
+                </div>
+            </div>
+            <div class="card table-container">
+                <table id="membersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Next Payment</th>
+                            <th>Status</th>
+                            <th>Unpaid Months</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- JS Populated --></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Unpaid Section -->
+        <section id="unpaid" class="hidden">
+            <h2>Unpaid Members</h2>
+            <div class="card table-container">
+                <table id="unpaidTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Last Payment</th>
+                            <th>Unpaid Months</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Monthly Attendance Log Section -->
+        <section id="attendance-log" class="hidden">
+            <div class="flex-between mb-4">
+                <h2>Monthly Attendance Log</h2>
+                <div style="text-align: right;">
+                    <span class="text-muted">Total Visits This Month: </span>
+                    <span id="monthTotalCount" class="font-bold text-primary" style="font-size: 1.5rem;">0</span>
+                </div>
+            </div>
+            <div class="card table-container">
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label>Select Month</label>
+                        <input type="month" id="logMonthFilter" onchange="renderAttendanceLog()">
+                    </div>
+                    <div class="filter-group">
+                        <label>Search ID (Optional)</label>
+                        <input type="text" id="logIdFilter" placeholder="Enter Member ID..." oninput="renderAttendanceLog()">
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                    <button class="btn btn-danger" onclick="deleteMonthLog()">Delete Month Log</button>
+                </div>
+                <table id="attendanceTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Check-In</th>
+                            <th>Check-Out</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Settings / Backup Section -->
+        <section id="settings" class="hidden">
+            <h2>Settings & Backup</h2>
+            <div class="grid-2">
+                <div class="card">
+                    <h3>Data Management</h3>
+                    <p>Backup your data to a JSON file or restore from a file.</p>
+                    <div class="flex-between mt-4">
+                        <button class="btn btn-primary" onclick="downloadBackup()">Download Backup</button>
+                        <input type="file" id="restoreFile" onchange="restoreBackup(this)">
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>System</h3>
+                    <p>Clear all local data (Factory Reset).</p>
+                    <button class="btn btn-danger mt-4" onclick="clearAllData()">⚠️ Clear All Data</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- Add/Edit Member Modal -->
+<div id="memberModal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="modalTitle">Add New Member</h3>
+        <form id="memberForm" onsubmit="handleMemberSubmit(event)">
+            <input type="hidden" id="editId">
+            <label>ID</label>
+            <input type="text" id="inpId" required >
+            <label>Name</label>
+            <input type="text" id="inpName" required >
+            <label>Phone Number</label>
+            <div style="display:flex; gap:5px;">
+                <input type="text" value="94" readonly style="width: 50px; text-align: center;">
+                <input type="text" id="inpPhone" required placeholder="7xxxxxxx" pattern="[0-9]{9}" title="Enter 9 digits">
+            </div>
+            <label>Date of Birth</label>
+            <input type="date" id="inpDob" required>
+            <label>Address</label>
+            <input type="text" id="inpAddress">
+            <label>Weight (kg)</label>
+            <input type="number" id="inpWeight"  step="0.1">
+            <label>Join Date / Payment Start Date</label>
+            <input type="date" id="inpJoinDate" required title="This day will be used as fixed billing day every month.">
+            <label>Monthly Membership Price (LKR)</label>
+            <input type="number" id="inpPrice" required min="0">
+            <label>Admission Fee (One Time - Optional)</label>
+            <input type="number" id="inpAdmissionFee" value="0" min="0">
+            <div class="flex-between mt-4">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Member</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- QR Code Generator Modal -->
+<div id="qrModal" class="modal-overlay">
+    <div class="modal" style="background: white; color: black;">
+        <h3 style="color: black; margin-bottom: 1rem;">Member ID Card</h3>
+        <div id="qr-display">
+            <h2 id="qrName">John Doe</h2>
+            <p>ID: <span id="qrId">123</span></p>
+            <div id="qrcode" style="margin-top: 10px; display: flex; justify-content: center;"></div>
+            <p style="margin-top: 10px; font-size: 0.8rem;">Scan at Kiosk for Attendance</p>
+        </div>
+        <div class="mt-4 no-print" style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn btn-primary no-print" onclick="window.print()">🖨️ Print Card</button>
+            <button class="btn btn-outline no-print" onclick="document.getElementById('qrModal').style.display='none'">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Payment History Modal -->
+<div id="historyModal" class="modal-overlay">
+    <div class="modal" style="max-width: 600px;">
+        <h3 id="historyModalTitle">Payment History</h3>
+        <div class="table-container" style="max-height: 300px;">
+            <table id="historyTable">
+                <thead><tr><th>Date</th><th>Type</th><th>Amount</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="flex-between mt-4">
+            <button class="btn btn-danger" onclick="clearCurrentHistory()">Clear History</button>
+            <button class="btn btn-outline" onclick="closeHistoryModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirmModal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="confirmTitle">Confirm Action</h3>
+        <p id="confirmMessage">Are you sure you want to proceed?</p>
+        <div class="flex-between mt-4">
+            <button class="btn btn-outline" onclick="closeConfirmModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirm()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const APP_KEY = 'gym_sys_v24';
+    let state = {
+        members: [],
+        attendance: [],
+        financials: { monthly: 0, admission: 0 },
+        settings: { darkMode: false }
+    };
+
+    let isAdminLoggedIn = false;
+    let html5QrcodeScanner = null;
+    let currentHistoryMemberId = null;
+    let confirmCallback = null;
+
+    // --- SCAN CONTROL VARIABLES ---
+    let lastScannedCode = null;
+    let isProcessingScan = false; 
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+        applyTheme();
+        document.getElementById('logMonthFilter').value = new Date().toISOString().slice(0, 7);
+        document.getElementById('landing-section').style.display = 'flex';
+    });
+
+    function saveData() {
+        localStorage.setItem(APP_KEY, JSON.stringify(state));
+    }
+
+    function loadData() {
+        const stored = localStorage.getItem(APP_KEY);
+        if (stored) {
+            state = JSON.parse(stored);
+            state.attendance = state.attendance.map(a => ({
+                checkIn: a.checkIn || a.time || new Date().toTimeString().split(' ')[0],
+                checkOut: a.checkOut || null,
+                ...a
+            }));
+        } else {
+            seedData();
+        }
+    }
+
+    function seedData() {
+        state.members = [
+             { id: '1', name: 'Sameera Liyanage', phone: '0772827926', dob: '1998-06-09', address: 'welihinda keppitiwalawa', weight: 60, joinDate: '2026-01-04', lastPayment: '2026-01-04', price: 3000, admissionPaid: true, history: [] },
+             { id: '2', name: 'K.C.S.Kumara', phone: '07850013', dob: '1979-12-27', address: 'pangolla,maharachchimulla', weight: 71, joinDate: '2026-01-15', lastPayment: '2026-01-15', price: 3000, admissionPaid: true, history: [] },
+        ];
+        state.attendance = [];
+        saveData();
+    }
+
+    /* TOAST & MODALS */
+    function showToast(title, message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `apple-toast toast-${type}`;
+        const icons = { success: '✓', error: '✕', warning: '!', info: 'i' };
+        toast.innerHTML = `
+            <div class="apple-toast-icon">${icons[type]}</div>
+            <div class="apple-toast-content">
+                <div class="apple-toast-title">${title}</div>
+                <div class="apple-toast-message">${message}</div>
+            </div>
+            <button class="apple-toast-close" onclick="closeToast(this)">✕</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 4000);
+    }
+
+    function closeToast(btn) {
+        const toast = btn.closest('.apple-toast');
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    }
+
+    function showConfirm(title, message, callback) {
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        confirmCallback = callback;
+        document.getElementById('confirmModal').style.display = 'flex';
+    }
+
+    function closeConfirmModal() {
+        document.getElementById('confirmModal').style.display = 'none';
+        confirmCallback = null;
+    }
+
+    function executeConfirm() {
+        if (confirmCallback) confirmCallback();
+        closeConfirmModal();
+    }
+
+    /* AUDIO */
+    function playSuccessSound() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return; 
+        const ctx = new AudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.1);
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+    }
+
+    function playErrorSound() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    }
+
+    /* QR LOGIC */
+    function showQRModal(id, name) {
+        const modal = document.getElementById('qrModal');
+        document.getElementById('qrName').innerText = name;
+        document.getElementById('qrId').innerText = id;
+        document.getElementById("qrcode").innerHTML = "";
+        new QRCode(document.getElementById("qrcode"), { text: id, width: 128, height: 128 });
+        modal.style.display = 'flex';
+    }
+
+    function applyTheme() {
+        if(state.settings.darkMode) document.body.classList.add('dark-mode');
+        else document.body.classList.remove('dark-mode');
+    }
+
+    /* AUTH & NAVIGATION */
+    function triggerLock() {
+        stopScanning();
+        document.getElementById('landing-section').style.display = 'none';
+        document.getElementById('adminInterface').classList.add('hidden'); 
+        document.getElementById('passwordModal').style.display = 'flex';
+        document.getElementById('adminPassword').value = '';
+        document.getElementById('adminPassword').focus();
+    }
+
+    function exitToLanding() {
+        stopScanning();
+        document.getElementById('passwordModal').style.display = 'none';
+        document.getElementById('kiosk-view').classList.remove('active');
+        document.getElementById('adminInterface').classList.add('hidden'); 
+        document.getElementById('landing-section').style.display = 'flex';
+    }
+
+    function showPasswordModal() {
+        document.getElementById('landing-section').style.display = 'none';
+        document.getElementById('passwordModal').style.display = 'flex';
+    }
+
+    function checkAuth() {
+        const pass = document.getElementById('adminPassword').value;
+        if (pass === '1234') {
+            isAdminLoggedIn = true;
+            document.getElementById('passwordModal').style.display = 'none';
+            document.getElementById('adminInterface').classList.remove('hidden');
+            renderDashboard();
+            renderMembers();
+        } else {
+            alert('Incorrect Password');
+        }
+    }
+
+    function showSection(sectionId) {
+        document.querySelectorAll('.main-content > section').forEach(s => s.classList.add('hidden'));
+        document.getElementById(sectionId).classList.remove('hidden');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelector(`.nav-item[onclick="showSection('${sectionId}')"]`)?.classList.add('active');
+        
+        if(sectionId === 'dashboard') renderDashboard();
+        if(sectionId === 'members') renderMembers();
+        if(sectionId === 'unpaid') renderUnpaid();
+        if(sectionId === 'attendance-log') renderAttendanceLog();
+        if(sectionId === 'member-details') renderAllMemberDetails();
+    }
+
+    /* KIOSK & SCANNING */
+    function enterKioskMode() {
+        document.getElementById('landing-section').style.display = 'none';
+        document.getElementById('kiosk-view').classList.add('active');
+        document.getElementById('kioskResult').classList.add('hidden');
+        startScanning();
+    }
+
+    function startScanning() {
+        if (html5QrcodeScanner) return;
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure).catch(err => {
+            console.error("Camera start error:", err);
+            showToast("Camera Error", "Could not start camera.", "error");
+        });
+    }
+
+    function stopScanning() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => {
+                html5QrcodeScanner.clear();
+                html5QrcodeScanner = null;
+            }).catch(err => console.error("Stop error:", err));
+        }
+    }
+
+    function toggleCamera() {
+        const btn = document.getElementById('cameraBtn');
+        if (html5QrcodeScanner) {
+            stopScanning();
+            btn.innerText = "Turn Camera On";
+            btn.classList.remove('btn-outline');
+            btn.classList.add('btn-primary');
+        } else {
+            startScanning();
+            btn.innerText = "Turn Camera Off";
+            btn.classList.add('btn-outline');
+            btn.classList.remove('btn-primary');
+        }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        if (isProcessingScan || decodedText === lastScannedCode) return;
+        isProcessingScan = true;
+        lastScannedCode = decodedText;
+        handleKioskScan(decodedText);
+    }
+
+    function onScanFailure(error) {
+        lastScannedCode = null;
+    }
+
+    function handleScannerInput(event) {
+        if (event.key === 'Enter') {
+            const id = document.getElementById('kioskInput').value;
+            if(id) {
+                handleKioskScan(id);
+                document.getElementById('kioskInput').value = '';
+            }
+        }
+    }
+
+    // --- UPDATED: CORE ATTENDANCE LOGIC ---
+    // Unpaid members ARE allowed to check in, but shown in Red.
+    function handleKioskScan(memberId) {
+        const member = state.members.find(m => m.id === memberId);
+        
+        const overlay = document.getElementById('welcomeNotification');
+        const card = overlay.querySelector('.welcome-card');
+        const icon = card.querySelector('.check-icon');
+        const h1 = document.getElementById('welcomeMemberName');
+        const h2 = card.querySelector('h2');
+        const p = document.getElementById('welcomeMessage');
+
+        // Reset styles
+        overlay.classList.remove('mode-error');
+        icon.innerText = "✅";
+        icon.style.color = "var(--success)";
+
+        if (!member) {
+            overlay.classList.add('mode-error');
+            icon.innerText = "❌";
+            h1.innerText = "Unknown ID";
+            h2.innerText = "Not Registered";
+            p.innerText = "Please register at the front desk.";
+            playErrorSound();
+            showOverlay(overlay);
+            return;
+        }
+
+        // Check Unpaid Status
+        const unpaidMonths = getUnpaidMonths(member);
+        const isUnpaid = unpaidMonths > 0;
+
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        const timeNow = now.toTimeString().split(' ')[0];
+        const timeNowShort = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        let record = state.attendance.find(a => a.memberId === memberId && a.date === todayStr);
+
+        // Helper to set Unpaid Red Style
+        const applyUnpaidStyle = () => {
+            overlay.classList.add('mode-error');
+            icon.innerText = "⚠️";
+        };
+
+        if (!record) {
+            // --- CHECK-IN ---
+            record = {
+                memberId: memberId,
+                memberName: member.name,
+                date: todayStr,
+                checkIn: timeNow,
+                checkOut: null
+            };
+            state.attendance.push(record);
+            saveData();
+
+            h1.innerText = member.name;
+            h2.innerText = "Welcome!";
+            
+            if (isUnpaid) {
+                applyUnpaidStyle();
+                p.innerText = `Check-In Recorded.\nNOTE: ${unpaidMonths} Month(s) Unpaid.`;
+            } else {
+                p.innerText = `Attendance marked successfully.\nCheck-In Time: ${timeNowShort}`;
+            }
+            playSuccessSound();
+            showOverlay(overlay);
+
+        } else if (record && !record.checkOut) {
+            // --- CHECK-OUT ---
+            const checkInDate = new Date(`${record.date}T${record.checkIn}`);
+            const minutesPassed = (now - checkInDate) / (1000 * 60);
+
+            if (minutesPassed < 30) {
+                overlay.classList.add('mode-error');
+                icon.innerText = "⏳";
+                h1.innerText = member.name;
+                h2.innerText = "Too Early";
+                const remaining = Math.ceil(30 - minutesPassed);
+                p.innerText = `Check-out is available after 30 minutes.\nPlease wait ${remaining} more minute(s).`;
+                playErrorSound();
+                showOverlay(overlay);
+                setTimeout(() => { isProcessingScan = false; lastScannedCode = null; }, 3000);
+                return;
+            } else {
+                record.checkOut = timeNow;
+                saveData();
+
+                h1.innerText = member.name;
+                h2.innerText = "Goodbye!";
+
+                if (isUnpaid) {
+                    applyUnpaidStyle();
+                    p.innerText = `Check-Out Recorded.\nNOTE: ${unpaidMonths} Month(s) Unpaid.`;
+                } else {
+                    p.innerText = `Check-Out recorded successfully.\nCheck-Out Time: ${timeNowShort}`;
+                }
+                playSuccessSound();
+                showOverlay(overlay);
+            }
+
+        } else {
+            // Already completed
+            overlay.classList.add('mode-error');
+            icon.innerText = "✅";
+            h1.innerText = member.name;
+            h2.innerText = "Completed";
+            p.innerText = "You have already completed attendance for today.";
+            playErrorSound();
+            showOverlay(overlay);
+        }
+    }
+
+    function showOverlay(overlay) {
+        overlay.style.display = 'flex';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            isProcessingScan = false;
+            lastScannedCode = null;
+        }, 3000);
+    }
+
+    /* DASHBOARD & STATS */
+    function renderDashboard() {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const currentlyIn = state.attendance.filter(a => a.date === today && !a.checkOut).length;
+        document.getElementById('statCurrentlyIn').innerText = currentlyIn;
+
+        const activeMembers = state.members.filter(m => !isExpired(m)).length;
+        document.getElementById('statActiveMembers').innerText = activeMembers;
+
+        document.getElementById('statTotalMonthly').innerText = `LKR ${state.financials.monthly.toFixed(2)}`;
+        document.getElementById('statTotalAdmission').innerText = `LKR ${state.financials.admission.toFixed(2)}`;
+        
+        let expiryCount = 0;
+        let inactiveCount = 0;
+        const notifications = [];
+
+        state.members.forEach(m => {
+            if (isExpired(m)) expiryCount++;
+
+            const lastAttendance = state.attendance.filter(a => a.memberId === m.id).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+            let daysSince = 100;
+            
+            if (lastAttendance) {
+                daysSince = Math.floor((new Date() - new Date(lastAttendance.date)) / (1000*60*60*24));
+            } else if (m.joinDate) {
+                daysSince = Math.floor((new Date() - new Date(m.joinDate)) / (1000*60*60*24));
+            }
+
+            if (daysSince > 5) {
+                inactiveCount++;
+                notifications.push(`
+                    <div class="alert-row" style="padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div style="flex: 1;">
+                            <strong>${m.name}</strong> <br>
+                            <span class="text-muted" style="font-size: 0.85rem;">Last: ${daysSince} days ago</span>
+                        </div>
+                        <button class="btn btn-sm btn-whatsapp" onclick="sendAbsentReminder('${m.id}', ${daysSince})">WhatsApp</button>
+                    </div>
+                `);
+            }
+        });
+
+        document.getElementById('statExpiryCount').innerText = expiryCount;
+        document.getElementById('statInactiveCount').innerText = inactiveCount;
+        
+        const notifList = document.getElementById('notificationList');
+        const remindBtn = document.getElementById('remindAllBtn');
+        
+        if (notifications.length > 0) {
+            notifList.innerHTML = notifications.join('');
+            remindBtn.style.display = 'inline-flex';
+        } else {
+            notifList.innerHTML = '<p class="text-muted">No urgent alerts.</p>';
+            remindBtn.style.display = 'none';
+        }
+    }
+
+    // --- NEW: DASHBOARD DATA HELPERS ---
+    function getDashboardData() {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Calculate Stats
+        const currentlyIn = state.attendance.filter(a => a.date === today && !a.checkOut).length;
+        const activeMembers = state.members.filter(m => !isExpired(m)).length;
+        const expiryCount = state.members.filter(m => isExpired(m)).length;
+        
+        // Calculate Inactive List
+        const inactiveList = [];
+        state.members.forEach(m => {
+            const lastAttendance = state.attendance.filter(a => a.memberId === m.id).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+            let daysSince = 100;
+            if (lastAttendance) {
+                daysSince = Math.floor((new Date() - new Date(lastAttendance.date)) / (1000*60*60*24));
+            } else if (m.joinDate) {
+                daysSince = Math.floor((new Date() - new Date(m.joinDate)) / (1000*60*60*24));
+            }
+            
+            if (daysSince > 5) {
+                inactiveList.push({
+                    id: m.id,
+                    name: m.name,
+                    phone: m.phone,
+                    days_absent: daysSince
+                });
+            }
+        });
+
+        return {
+            generated_at: new Date().toISOString(),
+            statistics: {
+                currently_in_gym: currentlyIn,
+                active_members: activeMembers,
+                expired_members: expiryCount,
+                monthly_revenue: state.financials.monthly,
+                admission_revenue: state.financials.admission
+            },
+            inactive_alerts: inactiveList
+        };
+    }
+
+    function downloadDashboardJson() {
+        const data = getDashboardData();
+        const dataStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dashboard_report_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        showToast('Download Started', 'Dashboard JSON is downloading.', 'success');
+    }
+
+    function downloadDashboardExcel() {
+        const data = getDashboardData();
+        
+        // 1. Create Summary Sheet Data
+        const summaryData = [
+            { Metric: "Report Generated", Value: data.generated_at },
+            { Metric: "Currently In Gym", Value: data.statistics.currently_in_gym },
+            { Metric: "Active Members", Value: data.statistics.active_members },
+            { Metric: "Expired Members", Value: data.statistics.expired_members },
+            { Metric: "Monthly Revenue (LKR)", Value: data.statistics.monthly_revenue },
+            { Metric: "Admission Revenue (LKR)", Value: data.statistics.admission_revenue }
+        ];
+
+        // 2. Create Inactive List Sheet Data
+        const inactiveData = data.inactive_alerts.map(m => ({
+            "Member ID": m.id,
+            "Name": m.name,
+            "Phone": m.phone,
+            "Days Absent": m.days_absent
+        }));
+
+        // 3. Create Workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Add Summary Sheet
+        const ws1 = XLSX.utils.json_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(wb, ws1, "Summary");
+        
+        // Add Inactive Sheet (only if there is data)
+        if (inactiveData.length > 0) {
+            const ws2 = XLSX.utils.json_to_sheet(inactiveData);
+            XLSX.utils.book_append_sheet(wb, ws2, "Inactive Members");
+        }
+
+        // 4. Download
+        XLSX.writeFile(wb, `dashboard_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('Download Started', 'Dashboard Excel is downloading.', 'success');
+    }
+
+    function sendAbsentReminder(id, days) {
+        const member = state.members.find(m => m.id === id);
+        if (!member) return;
+        const msg = `Hi ${member.name}, we noticed you haven't checked in for ${days} days. We miss you at the gym! Hope to see you soon.`;
+        window.open(`https://wa.me/94${member.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    function remindAllInactive() {
+        let count = 0;
+        state.members.forEach(m => {
+            const lastAttendance = state.attendance.filter(a => a.memberId === m.id).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+            let daysSince = 100;
+            if (lastAttendance) {
+                daysSince = Math.floor((new Date() - new Date(lastAttendance.date)) / (1000*60*60*24));
+            } else if (m.joinDate) {
+                daysSince = Math.floor((new Date() - new Date(m.joinDate)) / (1000*60*60*24));
+            }
+
+            if (daysSince > 5) {
+                const msg = `Hi ${m.name}, we noticed you haven't checked in for ${daysSince} days. We miss you at the gym!`;
+                window.open(`https://wa.me/94${m.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                count++;
+            }
+        });
+        showToast('Reminders Sent', `Opened WhatsApp for ${count} members.`, 'success');
+    }
+
+    function isExpired(member) {
+        if (!member.lastPayment) return true;
+        const last = new Date(member.lastPayment);
+        const nextDue = new Date(last.getFullYear(), last.getMonth() + 1, last.getDate());
+        return new Date() > nextDue;
+    }
+
+    function resetFinancials(type) {
+        if(type === 'monthly') state.financials.monthly = 0;
+        if(type === 'admission') state.financials.admission = 0;
+        saveData();
+        renderDashboard();
+        showToast('Reset', 'Financials reset successfully.', 'info');
+    }
+
+    function showReport(type) {
+        const container = document.getElementById('reportResult');
+        let html = '';
+        const today = new Date();
+
+        if (type === 'daily') {
+            const todayStr = today.toISOString().split('T')[0];
+            const logs = state.attendance.filter(a => a.date === todayStr);
+            html = `<h4>Today (${todayStr})</h4><p>Check-ins: ${logs.length}</p>`;
+        } else {
+            const monthStr = today.toISOString().slice(0, 7);
+            const logs = state.attendance.filter(a => a.date.startsWith(monthStr));
+            html = `<h4>This Month</h4><p>Total Visits: ${logs.length}</p>`;
+        }
+        container.innerHTML = html;
+    }
+
+    /* MEMBERS MANAGEMENT */
+    function renderMembers() {
+        const search = document.getElementById('memberSearch')?.value.toLowerCase() || '';
+        const tbody = document.querySelector('#membersTable tbody');
+        tbody.innerHTML = '';
+
+        state.members
+            .filter(m => m.name.toLowerCase().includes(search) || m.id.toLowerCase().includes(search))
+            .forEach(m => {
+                const unpaid = getUnpaidMonths(m);
+                const expired = isExpired(m);
+                const statusBadge = expired ? '<span class="badge bg-red">Expired</span>' : '<span class="badge bg-green">Active</span>';
+                const unpaidBadge = unpaid > 0 ? `<span class="unpaid-badge">${unpaid} Month(s)</span>` : '-';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${m.id}</td>
+                        <td>${m.name}</td>
+                        <td>${m.lastPayment || 'N/A'}</td>
+                        <td>${statusBadge}</td>
+                        <td>${unpaidBadge}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-sm btn-primary" onclick="showQRModal('${m.id}', '${m.name}')">QR</button>
+                                <button class="btn btn-sm btn-outline" onclick="editMember('${m.id}')">Edit</button>
+                                <button class="btn btn-sm btn-outline" onclick="showHistory('${m.id}')">History</button>
+                                <button class="btn btn-sm btn-success" onclick="recordPayment('${m.id}')">Pay</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function renderAllMemberDetails() {
+        const search = document.getElementById('detailsSearchInput')?.value.toLowerCase() || '';
+        const tbody = document.querySelector('#detailsTable tbody');
+        tbody.innerHTML = '';
+
+        state.members
+            .filter(m => m.name.toLowerCase().includes(search) || m.id.toLowerCase().includes(search))
+            .forEach(m => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${m.id}</td>
+                        <td>${m.name}</td>
+                        <td>${m.phone}</td>
+                        <td>${m.address || '-'}</td>
+                        <td>${calculateAge(m.dob)}</td>
+                        <td>${m.weight || '-'}</td>
+                        <td>${m.joinDate || '-'}</td>
+                    </tr>
+                `;
+            });
+    }
+
+    function calculateAge(dob) {
+        if (!dob || dob === '0000-00-00') return '-';
+        const birth = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        return age;
+    }
+
+    function getUnpaidMonths(member) {
+        if (!member.lastPayment || member.lastPayment === '0000-00-00') return 0;
+        const last = new Date(member.lastPayment);
+        const today = new Date();
+        const months = (today.getFullYear() - last.getFullYear()) * 12 + (today.getMonth() - last.getMonth());
+        return months > 0 ? months : 0;
+    }
+
+    function renderUnpaid() {
+        const tbody = document.querySelector('#unpaidTable tbody');
+        tbody.innerHTML = '';
+        const unpaidMembers = state.members.filter(m => getUnpaidMonths(m) > 0);
+
+        unpaidMembers.forEach(m => {
+            const unpaid = getUnpaidMonths(m);
+            tbody.innerHTML += `
+                <tr>
+                    <td>${m.id}</td>
+                    <td>${m.name}</td>
+                    <td>${m.lastPayment}</td>
+                    <td><span class="unpaid-badge">${unpaid} Months</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-success" onclick="recordPayment('${m.id}')">Record Payment</button>
+                        <button class="btn btn-sm btn-whatsapp" onclick="sendWhatsApp('${m.id}')">WhatsApp</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function sendWhatsApp(id) {
+        const member = state.members.find(m => m.id === id);
+        if (!member) return;
+        const unpaid = getUnpaidMonths(member);
+        const msg = `Hi ${member.name}, this is a reminder from LDF OS. You have ${unpaid} unpaid month(s). Please settle your dues. Thank you!`;
+        window.open(`https://wa.me/94${member.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    /* MODALS & FORMS */
+    function showAddMemberModal() {
+        document.getElementById('modalTitle').innerText = 'Add New Member';
+        document.getElementById('memberForm').reset();
+        document.getElementById('editId').value = '';
+        document.getElementById('memberModal').style.display = 'flex';
+    }
+
+    function editMember(id) {
+        const member = state.members.find(m => m.id === id);
+        if (!member) return;
+
+        document.getElementById('modalTitle').innerText = 'Edit Member';
+        document.getElementById('editId').value = id;
+        document.getElementById('inpId').value = member.id;
+        document.getElementById('inpId').readOnly = true;
+        document.getElementById('inpName').value = member.name;
+        document.getElementById('inpPhone').value = member.phone;
+        document.getElementById('inpDob').value = member.dob;
+        document.getElementById('inpAddress').value = member.address;
+        document.getElementById('inpWeight').value = member.weight;
+        document.getElementById('inpJoinDate').value = member.joinDate;
+        document.getElementById('inpPrice').value = member.price;
+        document.getElementById('inpAdmissionFee').value = member.admissionFee || 0;
+        
+        document.getElementById('memberModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('memberModal').style.display = 'none';
+        document.getElementById('inpId').readOnly = false;
+    }
+
+    function handleMemberSubmit(event) {
+        event.preventDefault();
+        const editId = document.getElementById('editId').value;
+        
+        const memberData = {
+            id: document.getElementById('inpId').value,
+            name: document.getElementById('inpName').value,
+            phone: document.getElementById('inpPhone').value,
+            dob: document.getElementById('inpDob').value,
+            address: document.getElementById('inpAddress').value,
+            weight: document.getElementById('inpWeight').value,
+            joinDate: document.getElementById('inpJoinDate').value,
+            price: parseFloat(document.getElementById('inpPrice').value),
+            admissionFee: parseFloat(document.getElementById('inpAdmissionFee').value) || 0,
+            lastPayment: null,
+            admissionPaid: false,
+            history: []
+        };
+
+        if (editId) {
+            const index = state.members.findIndex(m => m.id === editId);
+            const existing = state.members[index];
+            memberData.lastPayment = existing.lastPayment;
+            memberData.admissionPaid = existing.admissionPaid;
+            memberData.history = existing.history;
+            state.members[index] = memberData;
+            showToast('Updated', 'Member details updated.', 'success');
+        } else {
+            if (state.members.find(m => m.id === memberData.id)) {
+                showToast('Error', 'Member ID already exists.', 'error');
+                return;
+            }
+            memberData.admissionPaid = memberData.admissionFee > 0 ? false : true;
+            memberData.lastPayment = memberData.joinDate;
+            state.members.push(memberData);
+            showToast('Success', 'New member added.', 'success');
+        }
+
+        saveData();
+        closeModal();
+        renderMembers();
+        renderDashboard();
+    }
+
+    function recordPayment(id) {
+        const member = state.members.find(m => m.id === id);
+        if (!member) return;
+        
+        showConfirm(
+            'Confirm Payment', 
+            `Mark payment for ${member.name}?\nMonthly Fee: ${member.price}\nAdmission: ${member.admissionFee && !member.admissionPaid ? member.admissionFee : 0}`, 
+            () => {
+                let lastDate = member.lastPayment ? new Date(member.lastPayment) : new Date();
+                let newPaymentDate = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, lastDate.getDate());
+                
+                member.lastPayment = newPaymentDate.toISOString().split('T')[0];
+                state.financials.monthly += member.price;
+                
+                if (!member.admissionPaid && member.admissionFee > 0) {
+                    state.financials.admission += member.admissionFee;
+                    member.admissionPaid = true;
+                }
+                
+                member.history = member.history || [];
+                member.history.push({
+                    date: new Date().toISOString(),
+                    type: 'Monthly',
+                    amount: member.price
+                });
+                
+                saveData();
+                renderMembers();
+                renderUnpaid();
+                renderDashboard();
+                showToast('Payment Recorded', `${member.name} paid successfully.`, 'success');
+            }
+        );
+    }
+
+    /* ATTENDANCE LOG */
+    function renderAttendanceLog() {
+        const monthFilter = document.getElementById('logMonthFilter').value;
+        const idFilter = document.getElementById('logIdFilter').value.toLowerCase();
+        const tbody = document.querySelector('#attendanceTable tbody');
+        tbody.innerHTML = '';
+        
+        let logs = state.attendance;
+        if (monthFilter) logs = logs.filter(a => a.date.startsWith(monthFilter));
+        if (idFilter) logs = logs.filter(a => a.memberId.toLowerCase().includes(idFilter) || a.memberName.toLowerCase().includes(idFilter));
+        
+        logs.sort((a,b) => new Date(b.date) - new Date(a.date));
+        document.getElementById('monthTotalCount').innerText = logs.length;
+
+        logs.forEach(a => {
+            const checkInTime = a.checkIn ? a.checkIn.substring(0,5) : '-';
+            const checkOutTime = a.checkOut ? a.checkOut.substring(0,5) : 'Active';
+            
+            const member = state.members.find(m => m.id === a.memberId);
+            const isUnpaid = member ? getUnpaidMonths(member) > 0 : false;
+            const rowStyle = isUnpaid ? 'style="color: var(--danger); font-weight: bold;"' : '';
+
+            tbody.innerHTML += `
+                <tr ${rowStyle}>
+                    <td>${a.date}</td>
+                    <td>${a.memberId}</td>
+                    <td>${a.memberName || 'Unknown'}</td>
+                    <td>${checkInTime}</td>
+                    <td>${checkOutTime}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="deleteAttendanceRecord('${a.memberId}', '${a.date}')">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function deleteMonthLog() {
+        const month = document.getElementById('logMonthFilter').value;
+        if(!month) return;
+        showConfirm('Delete Month', `Are you sure you want to delete all logs for ${month}?`, () => {
+            state.attendance = state.attendance.filter(a => !a.date.startsWith(month));
+            saveData();
+            renderAttendanceLog();
+            showToast('Deleted', 'Attendance log cleared for month.', 'info');
+        });
+    }
+
+    function deleteAttendanceRecord(id, date) {
+        showConfirm('Delete Record', 'Remove this specific attendance entry?', () => {
+            state.attendance = state.attendance.filter(a => !(a.memberId === id && a.date === date));
+            saveData();
+            renderAttendanceLog();
+        });
+    }
+
+    /* BACKUP & RESTORE */
+    function downloadBackup() {
+        const dataStr = JSON.stringify(state, null, 2);
+        const blob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gym_backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        showToast('Backup', 'Download started.', 'success');
+    }
+
+    function restoreBackup(input) {
+        if (input.files.length === 0) return;
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                state = json;
+                saveData();
+                showToast('Restore Success', 'Data restored from backup.', 'success');
+                location.reload();
+            } catch (err) {
+                showToast('Error', 'Invalid backup file.', 'error');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function clearAllData() {
+        showConfirm('Factory Reset', 'This will delete ALL data. Are you absolutely sure?', () => {
+            localStorage.removeItem(APP_KEY);
+            location.reload();
+        });
+    }
+
+    function exportToCSV() {
+        let csv = 'ID,Name,Phone,Join Date,Last Payment,Status\n';
+        state.members.forEach(m => {
+            csv += `${m.id},"${m.name}","${m.phone}",${m.joinDate},${m.lastPayment},${isExpired(m) ? 'Expired' : 'Active'}\n`;
+        });
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'members_list.csv';
+        a.click();
+    }
+
+    function showHistory(id) {
+        const member = state.members.find(m => m.id === id);
+        if (!member) return;
+        currentHistoryMemberId = id;
+        document.getElementById('historyModalTitle').innerText = `${member.name} - Payment History`;
+        const tbody = document.querySelector('#historyTable tbody');
+        tbody.innerHTML = '';
+        if (member.history && member.history.length > 0) {
+            member.history.forEach(h => {
+                tbody.innerHTML += `<tr><td>${h.date.split('T')[0]}</td><td>${h.type}</td><td>LKR ${h.amount}</td></tr>`;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No history</td></tr>';
+        }
+        document.getElementById('historyModal').style.display = 'flex';
+    }
+
+    function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
+
+    function clearCurrentHistory() {
+        if (!currentHistoryMemberId) return;
+        showConfirm('Clear History', 'Clear payment history for this member?', () => {
+            const member = state.members.find(m => m.id === currentHistoryMemberId);
+            if (member) {
+                member.history = [];
+                saveData();
+                showHistory(currentHistoryMemberId);
+                showToast('Cleared', 'Payment history cleared.', 'info');
+            }
+        });
+    }
+</script>
+</body>
+</html>
